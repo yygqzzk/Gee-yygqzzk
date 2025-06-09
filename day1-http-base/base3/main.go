@@ -1,7 +1,7 @@
-package base3
+package main
 
 import (
-	"base3/gee"
+	"Gee/day1-http-base/base3/gee"
 	"fmt"
 	"net/http"
 )
