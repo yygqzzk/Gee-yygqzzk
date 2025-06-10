@@ -3,6 +3,8 @@ package gee
 import (
 	"log"
 	"net/http"
+	"strings"
+	"time"
 )
 
 type RouterGroup struct {
@@ -33,12 +35,14 @@ func (group *RouterGroup) Group(prefix string) *RouterGroup {
 	engine := group.engine
 	newGroup := &RouterGroup{
 		prefix: group.prefix + prefix, // 组合前缀
-		engine: engine,
-
-		// 关联引擎
+		engine: engine,                // 关联引擎
 	}
 	engine.groups = append(engine.groups, newGroup)
 	return newGroup
+}
+
+func (group *RouterGroup) Use(middlewares ...HandlerFunc) {
+	group.middlewares = append(group.middlewares, middlewares...)
 }
 
 func (group *RouterGroup) addRoute(method string, comp string, handler HandlerFunc) {
@@ -59,12 +63,29 @@ func (group *RouterGroup) POST(pattern string, handler HandlerFunc) {
 
 // 处理Http请求转发
 func (engine *Engine) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	var middlewares []HandlerFunc
+	for _, group := range engine.groups {
+		if strings.HasPrefix(req.URL.Path, group.prefix) {
+			middlewares = append(middlewares, group.middlewares...)
+		}
+	}
+
 	// 封装上下文
 	c := NewContext(w, req)
+	c.handlers = middlewares
 	engine.router.handle(c)
 }
 
 // 启动服务
 func (engine *Engine) Run(addr string) (err error) {
 	return http.ListenAndServe(addr, engine)
+}
+
+// 日志中间件
+func Logger() HandlerFunc {
+	return func(c *Context) {
+		t := time.Now()
+		c.Next()
+		log.Printf("[%d] %s in %v", c.StatusCode, c.Req.RequestURI, time.Since(t))
+	}
 }
